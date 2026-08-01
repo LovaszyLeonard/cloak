@@ -1,0 +1,6 @@
+Pillow
+pytest
+rich
+questionary
+pyfiglet
+cryptography
