@@ -1,3 +1,7 @@
+import os
+from PIL import Image
+from stego.image_lsb import encode, decode
+
 def test_encryption_roundtrip():
     from PIL import Image
     Image.new('RGB', (100,100), color='blue').save('enc_sample.png')
