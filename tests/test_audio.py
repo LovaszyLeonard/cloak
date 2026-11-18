@@ -1,6 +1,8 @@
 import wave
+
 import pytest
-from stego.carriers.audio import encode_audio, decode_audio, get_audio_capacity
+
+from stego.carriers.audio import decode_audio, encode_audio, get_audio_capacity
 from stego.exceptions import (
     CapacityError,
     DecryptionError,
@@ -11,11 +13,11 @@ from stego.exceptions import (
 
 
 def _create_wav(path, n_samples=22050, sampwidth=2, framerate=22050):
-    with wave.open(str(path), 'w') as wav:
+    with wave.open(str(path), "w") as wav:
         wav.setnchannels(1)
         wav.setsampwidth(sampwidth)
         wav.setframerate(framerate)
-        wav.writeframes(b'\x00' * (n_samples * sampwidth))
+        wav.writeframes(b"\x00" * (n_samples * sampwidth))
 
 
 def test_audio_roundtrip(tmp_path):

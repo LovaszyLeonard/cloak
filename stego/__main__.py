@@ -1,14 +1,14 @@
 import argparse
 import sys
 from pathlib import Path
-from typing import Tuple, Union
+
 from rich.console import Console
 from rich.table import Table
 
 from .carriers import (
-    encode_carrier,
     decode_carrier,
     decode_carrier_to_file,
+    encode_carrier,
     inspect_carrier,
 )
 from .exceptions import CloakError
@@ -30,61 +30,91 @@ def main():
         return
 
     parser = argparse.ArgumentParser(
-        prog='cloak',
-        description='Hide and extract secret messages and binary files inside PNG images and WAV audio files.',
-        epilog='Run without arguments to launch interactive mode.'
+        prog="cloak",
+        description="Hide and extract secret messages and binary files inside PNG images and WAV audio files.",
+        epilog="Run without arguments to launch interactive mode.",
     )
 
-    subparsers = parser.add_subparsers(dest='command', required=True, help='Available commands')
+    subparsers = parser.add_subparsers(dest="command", required=True, help="Available commands")
 
     # Unified encode command
-    enc_parser = subparsers.add_parser('encode', help='Hide a message or file in an image (PNG) or audio file (WAV)')
-    enc_parser.add_argument('-i', '--input', '--image', dest='input', required=True, help='Path to input carrier file')
-    enc_parser.add_argument('-o', '--output', required=True, help='Path for output carrier file')
+    enc_parser = subparsers.add_parser("encode", help="Hide a message or file in an image (PNG) or audio file (WAV)")
+    enc_parser.add_argument("-i", "--input", "--image", dest="input", required=True, help="Path to input carrier file")
+    enc_parser.add_argument("-o", "--output", required=True, help="Path for output carrier file")
     msg_group = enc_parser.add_mutually_exclusive_group(required=True)
-    msg_group.add_argument('-m', '--message', help='Text message to hide')
-    msg_group.add_argument('-f', '--file', help='Read message or binary payload from a file')
-    enc_parser.add_argument('-p', '--password', help='Password for encryption (optional)')
-    enc_parser.add_argument('-s', '--scatter', action='store_true', help='Scatter payload bits pseudo-randomly across carrier (anti-steganalysis)')
-    enc_parser.add_argument('--no-compress', dest='compress', action='store_false', default=True, help='Disable automatic payload compression')
+    msg_group.add_argument("-m", "--message", help="Text message to hide")
+    msg_group.add_argument("-f", "--file", help="Read message or binary payload from a file")
+    enc_parser.add_argument("-p", "--password", help="Password for encryption (optional)")
+    enc_parser.add_argument(
+        "-s",
+        "--scatter",
+        action="store_true",
+        help="Scatter payload bits pseudo-randomly across carrier (anti-steganalysis)",
+    )
+    enc_parser.add_argument(
+        "--no-compress",
+        dest="compress",
+        action="store_false",
+        default=True,
+        help="Disable automatic payload compression",
+    )
 
     # Unified decode command
-    dec_parser = subparsers.add_parser('decode', help='Extract a message or file from a PNG image or WAV audio file')
-    dec_parser.add_argument('-i', '--input', '--image', dest='input', required=True, help='Path to carrier file with hidden data')
-    dec_parser.add_argument('-p', '--password', help='Password for decryption (optional)')
-    dec_parser.add_argument('-O', '--output-file', '-o', dest='output_file', help='Save extracted payload directly to a file')
+    dec_parser = subparsers.add_parser("decode", help="Extract a message or file from a PNG image or WAV audio file")
+    dec_parser.add_argument(
+        "-i", "--input", "--image", dest="input", required=True, help="Path to carrier file with hidden data"
+    )
+    dec_parser.add_argument("-p", "--password", help="Password for decryption (optional)")
+    dec_parser.add_argument(
+        "-O", "--output-file", "-o", dest="output_file", help="Save extracted payload directly to a file"
+    )
 
     # Info / inspection command
-    info_parser = subparsers.add_parser('info', help='Inspect carrier metadata, capacity, and detect hidden payloads')
-    info_parser.add_argument('-i', '--input', '--image', dest='input', required=True, help='Path to carrier file to inspect')
+    info_parser = subparsers.add_parser("info", help="Inspect carrier metadata, capacity, and detect hidden payloads")
+    info_parser.add_argument(
+        "-i", "--input", "--image", dest="input", required=True, help="Path to carrier file to inspect"
+    )
 
     # Backward compatibility subcommands
-    aud_enc = subparsers.add_parser('audio-encode', help='Hide a message in a WAV audio file (alias)')
-    aud_enc.add_argument('-i', '--input', required=True, help='Path to input WAV file')
-    aud_enc.add_argument('-o', '--output', required=True, help='Path for output WAV file')
+    aud_enc = subparsers.add_parser("audio-encode", help="Hide a message in a WAV audio file (alias)")
+    aud_enc.add_argument("-i", "--input", required=True, help="Path to input WAV file")
+    aud_enc.add_argument("-o", "--output", required=True, help="Path for output WAV file")
     msg_aud = aud_enc.add_mutually_exclusive_group(required=True)
-    msg_aud.add_argument('-m', '--message', help='Text message to hide')
-    msg_aud.add_argument('-f', '--file', help='Read message or binary payload from a file')
-    aud_enc.add_argument('-p', '--password', help='Password for encryption (optional)')
-    aud_enc.add_argument('-s', '--scatter', action='store_true', help='Scatter payload bits pseudo-randomly across carrier (anti-steganalysis)')
-    aud_enc.add_argument('--no-compress', dest='compress', action='store_false', default=True, help='Disable automatic payload compression')
+    msg_aud.add_argument("-m", "--message", help="Text message to hide")
+    msg_aud.add_argument("-f", "--file", help="Read message or binary payload from a file")
+    aud_enc.add_argument("-p", "--password", help="Password for encryption (optional)")
+    aud_enc.add_argument(
+        "-s",
+        "--scatter",
+        action="store_true",
+        help="Scatter payload bits pseudo-randomly across carrier (anti-steganalysis)",
+    )
+    aud_enc.add_argument(
+        "--no-compress",
+        dest="compress",
+        action="store_false",
+        default=True,
+        help="Disable automatic payload compression",
+    )
 
-    aud_dec = subparsers.add_parser('audio-decode', help='Extract a message from a WAV audio file (alias)')
-    aud_dec.add_argument('-i', '--input', required=True, help='Path to WAV file with hidden data')
-    aud_dec.add_argument('-p', '--password', help='Password for decryption (optional)')
-    aud_dec.add_argument('-O', '--output-file', '-o', dest='output_file', help='Save extracted payload directly to a file')
+    aud_dec = subparsers.add_parser("audio-decode", help="Extract a message from a WAV audio file (alias)")
+    aud_dec.add_argument("-i", "--input", required=True, help="Path to WAV file with hidden data")
+    aud_dec.add_argument("-p", "--password", help="Password for decryption (optional)")
+    aud_dec.add_argument(
+        "-O", "--output-file", "-o", dest="output_file", help="Save extracted payload directly to a file"
+    )
 
     args = parser.parse_args()
 
-    if args.command in ('encode', 'audio-encode'):
+    if args.command in ("encode", "audio-encode"):
         handle_encode(args)
-    elif args.command in ('decode', 'audio-decode'):
+    elif args.command in ("decode", "audio-decode"):
         handle_decode(args)
-    elif args.command == 'info':
+    elif args.command == "info":
         handle_info(args)
 
 
-def _get_payload(args) -> Tuple[Union[str, bytes], bool]:
+def _get_payload(args) -> tuple[str | bytes, bool]:
     if args.message is not None:
         return args.message, False
     else:
@@ -117,8 +147,8 @@ def handle_encode(args):
 
     payload, is_binary = _get_payload(args)
     password = args.password
-    scatter = getattr(args, 'scatter', False)
-    compress = getattr(args, 'compress', True)
+    scatter = getattr(args, "scatter", False)
+    compress = getattr(args, "compress", True)
 
     try:
         encode_carrier(
@@ -150,7 +180,7 @@ def handle_decode(args):
 
     password = args.password
 
-    if getattr(args, 'output_file', None):
+    if getattr(args, "output_file", None):
         try:
             bytes_written = decode_carrier_to_file(
                 str(carrier_path),
@@ -208,8 +238,8 @@ def handle_info(args):
         table.add_row("Channels", "Stereo" if info.get("channels") == 2 else "Mono")
         table.add_row("Sample Rate", f"{info.get('sample_rate')} Hz")
         table.add_row("Sample Width", f"{info.get('sample_width_bits')}-bit")
-        mins = int(info.get('duration_seconds', 0) // 60)
-        secs = info.get('duration_seconds', 0) % 60
+        mins = int(info.get("duration_seconds", 0) // 60)
+        secs = info.get("duration_seconds", 0) % 60
         table.add_row("Duration", f"{mins:02d}:{secs:05.2f}")
 
     table.add_row("Maximum Capacity", _format_bytes(info["capacity_bytes"]))
@@ -237,5 +267,5 @@ def handle_info(args):
     console.print(table)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

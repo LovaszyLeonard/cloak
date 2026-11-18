@@ -3,39 +3,37 @@
 import wave
 import zlib
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Union
 
-from ..crypto import encrypt_bytes, decrypt_bytes
+from ..crypto import decrypt_bytes, encrypt_bytes
 from ..envelope import (
-    pack_envelope,
-    unpack_envelope,
-    peek_envelope,
-    embed_bits,
-    embed_bits_scattered,
-    derive_scatter_seed,
-    FLAG_ENCRYPTED,
     FLAG_BINARY,
     FLAG_COMPRESSED,
-    FLAG_SCATTERED,
+    FLAG_ENCRYPTED,
     HEADER_SIZE,
+    derive_scatter_seed,
+    embed_bits,
+    embed_bits_scattered,
+    pack_envelope,
+    peek_envelope,
+    unpack_envelope,
 )
 from ..exceptions import (
     CapacityError,
-    PasswordRequiredError,
     CorruptedPayloadError,
+    PasswordRequiredError,
     UnsupportedCarrierError,
 )
 
-LOSSY_AUDIO_EXTENSIONS = {'.mp3', '.ogg', '.aac', '.flac', '.m4a', '.wma', '.opus'}
+LOSSY_AUDIO_EXTENSIONS = {".mp3", ".ogg", ".aac", ".flac", ".m4a", ".wma", ".opus"}
 
 
-def _open_audio_safely(audio_path: Union[str, Path], mode: str = 'rb') -> wave.Wave_read:
+def _open_audio_safely(audio_path: str | Path, mode: str = "rb") -> wave.Wave_read:
     """Open WAV audio file with descriptive error handling for corrupted or unreadable audio."""
     path = Path(audio_path).expanduser()
     try:
         wav_in = wave.open(str(path), mode)
-        if mode == 'rb':
-            if wav_in.getcomptype() != 'NONE':
+        if mode == "rb":
+            if wav_in.getcomptype() != "NONE":
                 comp_name = wav_in.getcompname()
                 wav_in.close()
                 raise UnsupportedCarrierError(
@@ -46,14 +44,12 @@ def _open_audio_safely(audio_path: Union[str, Path], mode: str = 'rb') -> wave.W
     except (wave.Error, EOFError, OSError) as e:
         if isinstance(e, UnsupportedCarrierError):
             raise
-        raise UnsupportedCarrierError(
-            f"'{path.name}' is not a valid or readable WAV file: {e}"
-        ) from e
+        raise UnsupportedCarrierError(f"'{path.name}' is not a valid or readable WAV file: {e}") from e
 
 
-def get_audio_capacity(audio_path: Union[str, Path]) -> int:
+def get_audio_capacity(audio_path: str | Path) -> int:
     """Return maximum payload capacity in bytes for the given WAV audio file."""
-    with _open_audio_safely(audio_path, 'rb') as wav_in:
+    with _open_audio_safely(audio_path, "rb") as wav_in:
         n_frames = wav_in.getnframes()
         n_channels = wav_in.getnchannels()
     total_samples = n_frames * n_channels
@@ -61,11 +57,10 @@ def get_audio_capacity(audio_path: Union[str, Path]) -> int:
     return max(0, available_payload_bytes)
 
 
-def inspect_audio(audio_path: Union[str, Path]) -> Dict:
+def inspect_audio(audio_path: str | Path) -> dict:
     """Inspect audio properties, steganographic capacity, and detect Cloak payloads."""
     path = Path(audio_path).expanduser()
-    with _open_audio_safely(path, 'rb') as wav_in:
-        params = wav_in.getparams()
+    with _open_audio_safely(path, "rb") as wav_in:
         n_frames = wav_in.getnframes()
         framerate = wav_in.getframerate()
         n_channels = wav_in.getnchannels()
@@ -97,10 +92,10 @@ def inspect_audio(audio_path: Union[str, Path]) -> Dict:
 
 
 def encode_audio(
-    audio_path: Union[str, Path],
-    message: Union[str, bytes],
-    output_path: Union[str, Path],
-    password: Optional[str] = None,
+    audio_path: str | Path,
+    message: str | bytes,
+    output_path: str | Path,
+    password: str | None = None,
     is_binary: bool = False,
     scatter: bool = False,
     compress: bool = True,
@@ -114,7 +109,7 @@ def encode_audio(
         )
     out_p.parent.mkdir(parents=True, exist_ok=True)
 
-    with _open_audio_safely(audio_path, 'rb') as wav_in:
+    with _open_audio_safely(audio_path, "rb") as wav_in:
         params = wav_in.getparams()
         frames = wav_in.readframes(wav_in.getnframes())
 
@@ -124,7 +119,7 @@ def encode_audio(
     max_payload = (total_samples // 8) - HEADER_SIZE
 
     if isinstance(message, str):
-        payload_bytes = message.encode('utf-8')
+        payload_bytes = message.encode("utf-8")
     else:
         payload_bytes = bytes(message)
         is_binary = True
@@ -171,7 +166,7 @@ def encode_audio(
         embed_bits(raw_samples, envelope, stride=sampwidth)
 
     try:
-        with wave.open(str(out_p), 'wb') as wav_out:
+        with wave.open(str(out_p), "wb") as wav_out:
             wav_out.setparams(params)
             wav_out.writeframes(raw_samples)
     except (wave.Error, OSError) as e:
@@ -179,11 +174,11 @@ def encode_audio(
 
 
 def decode_audio_raw(
-    audio_path: Union[str, Path],
-    password: Optional[str] = None,
-) -> Tuple[int, bytes]:
+    audio_path: str | Path,
+    password: str | None = None,
+) -> tuple[int, bytes]:
     """Extract and decrypt raw payload bytes from a WAV audio file."""
-    with _open_audio_safely(audio_path, 'rb') as wav_in:
+    with _open_audio_safely(audio_path, "rb") as wav_in:
         params = wav_in.getparams()
         frames = wav_in.readframes(wav_in.getnframes())
 
@@ -213,13 +208,13 @@ def decode_audio_raw(
 
 
 def decode_audio(
-    audio_path: Union[str, Path],
-    password: Optional[str] = None,
+    audio_path: str | Path,
+    password: str | None = None,
 ) -> str:
     """Extract and decrypt text message from a WAV audio file."""
     flags, payload_bytes = decode_audio_raw(audio_path, password)
     try:
-        return payload_bytes.decode('utf-8')
+        return payload_bytes.decode("utf-8")
     except UnicodeDecodeError as e:
         if flags & FLAG_BINARY:
             raise ValueError("Payload contains binary data. Use -O / --output-file to save to disk.") from e

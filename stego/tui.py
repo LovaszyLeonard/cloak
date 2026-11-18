@@ -1,18 +1,19 @@
 """Interactive Terminal User Interface (TUI) for Cloak with inline validation and robust UX."""
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple, Union
+
 import questionary
+from pyfiglet import Figlet
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress
 from rich.table import Table
-from pyfiglet import Figlet
 
 from .carriers import (
-    encode_carrier,
     decode_carrier_raw,
+    encode_carrier,
     inspect_carrier,
 )
 from .envelope import FLAG_BINARY
@@ -34,12 +35,14 @@ def _format_bytes(num_bytes: int) -> str:
 # Real-Time Inline Input Validators for Questionary Prompts
 # ----------------------------------------------------------------------
 
+
 def _make_existing_file_validator(
     file_label: str = "File",
-    allowed_extensions: Optional[List[str]] = None,
-) -> Callable[[str], Union[bool, str]]:
+    allowed_extensions: list[str] | None = None,
+) -> Callable[[str], bool | str]:
     """Generate an inline validator ensuring the path points to an existing regular file."""
-    def validator(text: str) -> Union[bool, str]:
+
+    def validator(text: str) -> bool | str:
         stripped = text.strip()
         if not stripped:
             return f"{file_label} path cannot be empty."
@@ -56,12 +59,14 @@ def _make_existing_file_validator(
                 return f"{file_label} must have a valid extension: {', '.join(allowed_extensions)}"
 
         return True
+
     return validator
 
 
-def _make_output_path_validator(default_ext: Optional[str] = None) -> Callable[[str], Union[bool, str]]:
+def _make_output_path_validator(default_ext: str | None = None) -> Callable[[str], bool | str]:
     """Validate destination file path and ensure parent directory exists."""
-    def validator(text: str) -> Union[bool, str]:
+
+    def validator(text: str) -> bool | str:
         stripped = text.strip()
         if not stripped:
             return "Output path cannot be empty."
@@ -79,10 +84,11 @@ def _make_output_path_validator(default_ext: Optional[str] = None) -> Callable[[
             pass
 
         return True
+
     return validator
 
 
-def _validate_non_empty(text: str) -> Union[bool, str]:
+def _validate_non_empty(text: str) -> bool | str:
     if not text.strip():
         return "Secret message cannot be empty."
     return True
@@ -92,18 +98,18 @@ def _validate_non_empty(text: str) -> Union[bool, str]:
 # TUI Visuals & Sub-Flows
 # ----------------------------------------------------------------------
 
+
 def show_banner():
-    f = Figlet(font='slant')
-    banner = f.renderText('Cloak')
+    f = Figlet(font="slant")
+    banner = f.renderText("Cloak")
     console.print(Panel(banner, style="bold cyan"))
     console.print("Multi-Format LSB Steganography Toolkit (PNG & WAV)\n", style="italic yellow")
 
 
-def _get_payload_flow() -> Tuple[Union[str, bytes, None], bool, bool]:
+def _get_payload_flow() -> tuple[str | bytes | None, bool, bool]:
     """Helper that returns (payload, is_binary, cancelled)."""
     source_choice = questionary.select(
-        "Payload source:",
-        choices=["Type text message directly", "Embed file (text or binary)"]
+        "Payload source:", choices=["Type text message directly", "Embed file (text or binary)"]
     ).ask()
     if source_choice is None:
         return None, False, True
@@ -138,7 +144,7 @@ def _get_payload_flow() -> Tuple[Union[str, bytes, None], bool, bool]:
             return None, False, True
 
 
-def _get_password_flow(is_encoding: bool = True) -> Tuple[Optional[str], bool]:
+def _get_password_flow(is_encoding: bool = True) -> tuple[str | None, bool]:
     """Interactive password prompt with confirmation loop and cancellation support."""
     prompt_text = "Encrypt with password?" if is_encoding else "Is the payload password-protected?"
     use_encryption = questionary.confirm(prompt_text, default=True if is_encoding else False).ask()
@@ -168,7 +174,7 @@ def _get_password_flow(is_encoding: bool = True) -> Tuple[Optional[str], bool]:
         return password, False
 
 
-def carrier_hide_flow(carrier_type_label: str = "Image (PNG)", allowed_exts: Optional[List[str]] = None):
+def carrier_hide_flow(carrier_type_label: str = "Image (PNG)", allowed_exts: list[str] | None = None):
     console.print(f"\n[bold]HIDE IN {carrier_type_label.upper()}[/bold]\n")
     carrier_path = questionary.path(
         f"Select input {carrier_type_label}:",
@@ -193,7 +199,7 @@ def carrier_hide_flow(carrier_type_label: str = "Image (PNG)", allowed_exts: Opt
         return
 
     output_path = questionary.path(
-        f"Output path for carrier:",
+        "Output path for carrier:",
         validate=_make_output_path_validator(),
     ).ask()
     if output_path is None:
@@ -218,7 +224,7 @@ def carrier_hide_flow(carrier_type_label: str = "Image (PNG)", allowed_exts: Opt
         console.print(f"[red]Unexpected error during encoding: {e}[/red]")
 
 
-def carrier_reveal_flow(carrier_type_label: str = "Image (PNG)", allowed_exts: Optional[List[str]] = None):
+def carrier_reveal_flow(carrier_type_label: str = "Image (PNG)", allowed_exts: list[str] | None = None):
     console.print(f"\n[bold]REVEAL FROM {carrier_type_label.upper()}[/bold]\n")
     carrier_path = questionary.path(
         f"Select {carrier_type_label} with hidden data:",
@@ -260,8 +266,7 @@ def carrier_reveal_flow(carrier_type_label: str = "Image (PNG)", allowed_exts: O
             action = "Save to file"
         else:
             action = questionary.select(
-                "How would you like to view the payload?",
-                choices=["Display text on screen", "Save to file"]
+                "How would you like to view the payload?", choices=["Display text on screen", "Save to file"]
             ).ask()
 
         if action == "Save to file":
@@ -273,13 +278,19 @@ def carrier_reveal_flow(carrier_type_label: str = "Image (PNG)", allowed_exts: O
                 out_p = Path(save_path).expanduser()
                 out_p.parent.mkdir(parents=True, exist_ok=True)
                 out_p.write_bytes(payload_bytes)
-                console.print(Panel(f"Saved {_format_bytes(len(payload_bytes))} to [green]{save_path}[/green]", style="bold green"))
+                console.print(
+                    Panel(
+                        f"Saved {_format_bytes(len(payload_bytes))} to [green]{save_path}[/green]", style="bold green"
+                    )
+                )
         elif action == "Display text on screen":
             try:
-                text_msg = payload_bytes.decode('utf-8')
+                text_msg = payload_bytes.decode("utf-8")
                 console.print(Panel(f"[bold]Hidden message:[/bold]\n\n{text_msg}", style="bold green"))
             except UnicodeDecodeError:
-                console.print("[red]Payload contains binary data and cannot be displayed as UTF-8 text. Please save to a file.[/red]")
+                console.print(
+                    "[red]Payload contains binary data and cannot be displayed as UTF-8 text. Please save to a file.[/red]"
+                )
     except (CloakError, ValueError) as e:
         console.print(f"[red]Decoding failed: {e}[/red]")
     except Exception as e:
@@ -290,7 +301,7 @@ def carrier_info_flow():
     console.print("\n[bold]INSPECT CARRIER MEDIA[/bold]\n")
     path_str = questionary.path(
         "Select image or audio file to inspect:",
-        validate=_make_existing_file_validator("Carrier file", allowed_extensions=['.png', '.bmp', '.wav']),
+        validate=_make_existing_file_validator("Carrier file", allowed_extensions=[".png", ".bmp", ".wav"]),
     ).ask()
     if path_str is None:
         return
@@ -317,8 +328,8 @@ def carrier_info_flow():
         table.add_row("Channels", "Stereo" if info.get("channels") == 2 else "Mono")
         table.add_row("Sample Rate", f"{info.get('sample_rate')} Hz")
         table.add_row("Sample Width", f"{info.get('sample_width_bits')}-bit")
-        mins = int(info.get('duration_seconds', 0) // 60)
-        secs = info.get('duration_seconds', 0) % 60
+        mins = int(info.get("duration_seconds", 0) // 60)
+        secs = info.get("duration_seconds", 0) % 60
         table.add_row("Duration", f"{mins:02d}:{secs:05.2f}")
 
     table.add_row("Maximum Capacity", _format_bytes(info["capacity_bytes"]))
@@ -360,18 +371,18 @@ def run_tui():
                     "Hide payload in audio (WAV)",
                     "Reveal payload from audio (WAV)",
                     "Inspect carrier media info & detect payloads",
-                    "Exit"
-                ]
+                    "Exit",
+                ],
             ).ask()
 
             if action == "Hide payload in an image (PNG)":
-                carrier_hide_flow("Image (PNG)", allowed_exts=['.png', '.bmp'])
+                carrier_hide_flow("Image (PNG)", allowed_exts=[".png", ".bmp"])
             elif action == "Reveal payload from an image (PNG)":
-                carrier_reveal_flow("Image (PNG)", allowed_exts=['.png', '.bmp'])
+                carrier_reveal_flow("Image (PNG)", allowed_exts=[".png", ".bmp"])
             elif action == "Hide payload in audio (WAV)":
-                carrier_hide_flow("Audio (WAV)", allowed_exts=['.wav'])
+                carrier_hide_flow("Audio (WAV)", allowed_exts=[".wav"])
             elif action == "Reveal payload from audio (WAV)":
-                carrier_reveal_flow("Audio (WAV)", allowed_exts=['.wav'])
+                carrier_reveal_flow("Audio (WAV)", allowed_exts=[".wav"])
             elif action == "Inspect carrier media info & detect payloads":
                 carrier_info_flow()
             else:

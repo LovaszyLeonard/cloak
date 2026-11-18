@@ -2,45 +2,42 @@
 
 import zlib
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Union
+
 from PIL import Image, UnidentifiedImageError
 
-from ..crypto import encrypt_bytes, decrypt_bytes
+from ..crypto import decrypt_bytes, encrypt_bytes
 from ..envelope import (
-    pack_envelope,
-    unpack_envelope,
-    peek_envelope,
-    embed_bits,
-    embed_bits_scattered,
-    derive_scatter_seed,
-    FLAG_ENCRYPTED,
     FLAG_BINARY,
     FLAG_COMPRESSED,
-    FLAG_SCATTERED,
+    FLAG_ENCRYPTED,
     HEADER_SIZE,
+    derive_scatter_seed,
+    embed_bits,
+    embed_bits_scattered,
+    pack_envelope,
+    peek_envelope,
+    unpack_envelope,
 )
 from ..exceptions import (
     CapacityError,
-    PasswordRequiredError,
     CorruptedPayloadError,
+    PasswordRequiredError,
     UnsupportedCarrierError,
 )
 
-LOSSY_EXTENSIONS = {'.jpg', '.jpeg', '.webp'}
+LOSSY_EXTENSIONS = {".jpg", ".jpeg", ".webp"}
 
 
-def _open_image_safely(image_path: Union[str, Path]) -> Image.Image:
+def _open_image_safely(image_path: str | Path) -> Image.Image:
     """Open image file with descriptive error handling for corrupted or unreadable images."""
     path = Path(image_path).expanduser()
     try:
         return Image.open(path)
     except (UnidentifiedImageError, OSError) as e:
-        raise UnsupportedCarrierError(
-            f"'{path.name}' is not a valid or readable image file: {e}"
-        ) from e
+        raise UnsupportedCarrierError(f"'{path.name}' is not a valid or readable image file: {e}") from e
 
 
-def get_image_capacity(image_path: Union[str, Path]) -> int:
+def get_image_capacity(image_path: str | Path) -> int:
     """Return maximum payload capacity in bytes for the given image."""
     with _open_image_safely(image_path) as img:
         width, height = img.size
@@ -49,7 +46,7 @@ def get_image_capacity(image_path: Union[str, Path]) -> int:
     return max(0, available_payload_bytes)
 
 
-def inspect_image(image_path: Union[str, Path]) -> Dict:
+def inspect_image(image_path: str | Path) -> dict:
     """Inspect image properties, steganographic capacity, and detect Cloak payloads."""
     path = Path(image_path).expanduser()
     file_size = path.stat().st_size
@@ -65,7 +62,7 @@ def inspect_image(image_path: Union[str, Path]) -> Dict:
 
     # Peek envelope from the first pixels without loading full uncompressed image if possible
     with _open_image_safely(path) as img:
-        rgb_img = img.convert('RGB')
+        rgb_img = img.convert("RGB")
         raw_sample = rgb_img.tobytes()[: HEADER_SIZE * 8]
     envelope_info = peek_envelope(raw_sample, total_capacity_bytes=total_capacity_bytes, stride=1)
 
@@ -82,10 +79,10 @@ def inspect_image(image_path: Union[str, Path]) -> Dict:
 
 
 def encode_image(
-    image_path: Union[str, Path],
-    message: Union[str, bytes],
-    output_path: Union[str, Path],
-    password: Optional[str] = None,
+    image_path: str | Path,
+    message: str | bytes,
+    output_path: str | Path,
+    password: str | None = None,
     is_binary: bool = False,
     scatter: bool = False,
     compress: bool = True,
@@ -102,14 +99,14 @@ def encode_image(
         out_p.parent.mkdir(parents=True, exist_ok=True)
 
     with _open_image_safely(image_path) as img:
-        rgb_img = img.convert('RGB')
+        rgb_img = img.convert("RGB")
         img_size = rgb_img.size
         raw_bytes = bytearray(rgb_img.tobytes())
 
     max_payload = (len(raw_bytes) // 8) - HEADER_SIZE
 
     if isinstance(message, str):
-        payload_bytes = message.encode('utf-8')
+        payload_bytes = message.encode("utf-8")
     else:
         payload_bytes = bytes(message)
         is_binary = True
@@ -155,17 +152,17 @@ def encode_image(
     else:
         embed_bits(raw_bytes, envelope, stride=1)
 
-    new_img = Image.frombytes('RGB', img_size, bytes(raw_bytes))
-    new_img.save(str(out_p), 'PNG')
+    new_img = Image.frombytes("RGB", img_size, bytes(raw_bytes))
+    new_img.save(str(out_p), "PNG")
 
 
 def decode_image_raw(
-    image_path: Union[str, Path],
-    password: Optional[str] = None,
-) -> Tuple[int, bytes]:
+    image_path: str | Path,
+    password: str | None = None,
+) -> tuple[int, bytes]:
     """Extract and decrypt raw payload bytes from an image."""
     with _open_image_safely(image_path) as img:
-        rgb_img = img.convert('RGB')
+        rgb_img = img.convert("RGB")
         raw_bytes = rgb_img.tobytes()
 
     total_capacity_bytes = len(raw_bytes) // 8
@@ -192,13 +189,13 @@ def decode_image_raw(
 
 
 def decode_image(
-    image_path: Union[str, Path],
-    password: Optional[str] = None,
+    image_path: str | Path,
+    password: str | None = None,
 ) -> str:
     """Extract and decrypt text message from an image."""
     flags, payload_bytes = decode_image_raw(image_path, password)
     try:
-        return payload_bytes.decode('utf-8')
+        return payload_bytes.decode("utf-8")
     except UnicodeDecodeError as e:
         if flags & FLAG_BINARY:
             raise ValueError("Payload contains binary data. Use -O / --output-file to save to disk.") from e

@@ -1,43 +1,43 @@
 """Comprehensive test suite for edge cases, boundary conditions, and error recovery."""
 
 import wave
+
 import pytest
 from PIL import Image
 
 from stego.carriers import (
-    encode_carrier,
     decode_carrier,
     decode_carrier_raw,
+    detect_carrier_type,
+    encode_carrier,
     get_capacity,
     inspect_carrier,
-    detect_carrier_type,
 )
 from stego.exceptions import (
     CapacityError,
-    DecryptionError,
-    PasswordRequiredError,
-    PayloadNotFoundError,
     CorruptedPayloadError,
+    DecryptionError,
+    PayloadNotFoundError,
     UnsupportedCarrierError,
 )
-from stego.envelope import HEADER_SIZE
 
 
-def _create_image(path, width=80, height=80, color='blue'):
-    Image.new('RGB', (width, height), color=color).save(path)
+def _create_image(path, width=80, height=80, color="blue"):
+    Image.new("RGB", (width, height), color=color).save(path)
 
 
 def _create_wav(path, n_samples=20000, sampwidth=2, framerate=22050):
-    with wave.open(str(path), 'w') as wav:
+    with wave.open(str(path), "w") as wav:
         wav.setnchannels(1)
         wav.setsampwidth(sampwidth)
         wav.setframerate(framerate)
-        wav.writeframes(b'\x00' * (n_samples * sampwidth))
+        wav.writeframes(b"\x00" * (n_samples * sampwidth))
 
 
 # ----------------------------------------------------------------------
 # 1. Zero-byte / Empty Payload Tests
 # ----------------------------------------------------------------------
+
 
 def test_zero_byte_empty_string_image(tmp_path):
     img = tmp_path / "img.png"
@@ -80,15 +80,19 @@ def test_zero_byte_audio(tmp_path):
 # 2. Non-ASCII & Multilingual Unicode Tests
 # ----------------------------------------------------------------------
 
-@pytest.mark.parametrize("text", [
-    "Hello 🥷 Stego 🚀!",
-    "你好世界，这是一个隐藏的信息。",
-    "مرحبا بالعالم - رسالة سرية مشفرة",
-    "Привет, мир! Секретное сообщение.",
-    "こんにちは世界！暗号化された秘密のメッセージ。",
-    "Γειά σου κόσμε! Μυστικό μήνυμα.",
-    "Grüße aus München: Ä, Ö, Ü, ß!",
-])
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Hello 🥷 Stego 🚀!",
+        "你好世界，这是一个隐藏的信息。",
+        "مرحبا بالعالم - رسالة سرية مشفرة",
+        "Привет, мир! Секретное сообщение.",
+        "こんにちは世界！暗号化された秘密のメッセージ。",
+        "Γειά σου κόσμε! Μυστικό μήνυμα.",
+        "Grüße aus München: Ä, Ö, Ü, ß!",
+    ],
+)
 def test_unicode_multilingual_roundtrip(tmp_path, text):
     img = tmp_path / f"img_{hash(text)}.png"
     out = tmp_path / f"out_{hash(text)}.png"
@@ -102,6 +106,7 @@ def test_unicode_multilingual_roundtrip(tmp_path, text):
 # ----------------------------------------------------------------------
 # 3. Exact Capacity Boundaries
 # ----------------------------------------------------------------------
+
 
 def test_exact_capacity_boundary(tmp_path):
     """Test filling the carrier to 100% capacity and exceeding by exactly 1 byte."""
@@ -127,6 +132,7 @@ def test_exact_capacity_boundary(tmp_path):
 # 4. Header & Payload Tampering / Corruption
 # ----------------------------------------------------------------------
 
+
 def test_tampered_magic_signature_raises_payload_not_found(tmp_path):
     img = tmp_path / "carrier.png"
     out = tmp_path / "tampered.png"
@@ -136,9 +142,9 @@ def test_tampered_magic_signature_raises_payload_not_found(tmp_path):
 
     # Corrupt the first pixel's red LSB (which contains bit 7 of the 'C' in 'CLK')
     with Image.open(out) as im:
-        raw = bytearray(im.convert('RGB').tobytes())
+        raw = bytearray(im.convert("RGB").tobytes())
     raw[0] ^= 1  # flip the first bit of the magic signature
-    tampered_im = Image.frombytes('RGB', (80, 80), bytes(raw))
+    tampered_im = Image.frombytes("RGB", (80, 80), bytes(raw))
     tampered_im.save(out)
 
     with pytest.raises(PayloadNotFoundError):
@@ -154,11 +160,11 @@ def test_corrupted_length_exceeding_carrier_raises_corrupted_payload(tmp_path):
 
     # Infiltrate the length field: bytes 5..8 of envelope correspond to carrier bytes 40..71
     with Image.open(out) as im:
-        raw = bytearray(im.convert('RGB').tobytes())
+        raw = bytearray(im.convert("RGB").tobytes())
     # Set the MSB of the length header to 1 (claiming 2GB payload)
     raw[40] = (raw[40] & 0xFE) | 1
 
-    tampered_im = Image.frombytes('RGB', (30, 30), bytes(raw))
+    tampered_im = Image.frombytes("RGB", (30, 30), bytes(raw))
     tampered_im.save(out)
 
     with pytest.raises(CorruptedPayloadError):
@@ -174,10 +180,10 @@ def test_ciphertext_tampering_fails_gcm_auth_tag(tmp_path):
 
     # Flip 1 bit in the ciphertext region (after 9 envelope bytes * 8 = 72 bits)
     with Image.open(out) as im:
-        raw = bytearray(im.convert('RGB').tobytes())
+        raw = bytearray(im.convert("RGB").tobytes())
     raw[120] ^= 1  # flip a bit in ciphertext
 
-    tampered_im = Image.frombytes('RGB', (80, 80), bytes(raw))
+    tampered_im = Image.frombytes("RGB", (80, 80), bytes(raw))
     tampered_im.save(out)
 
     with pytest.raises(DecryptionError):
@@ -187,6 +193,7 @@ def test_ciphertext_tampering_fails_gcm_auth_tag(tmp_path):
 # ----------------------------------------------------------------------
 # 5. Unsupported Formats & Non-existent Files
 # ----------------------------------------------------------------------
+
 
 def test_detect_carrier_type_non_existent():
     with pytest.raises(FileNotFoundError):
@@ -207,6 +214,7 @@ def test_unsupported_carrier_format(tmp_path):
 # ----------------------------------------------------------------------
 # 6. Carrier Inspection Diagnostics
 # ----------------------------------------------------------------------
+
 
 def test_inspect_carrier_diagnostics(tmp_path):
     wav = tmp_path / "test.wav"
@@ -230,6 +238,7 @@ def test_inspect_carrier_diagnostics(tmp_path):
 # ----------------------------------------------------------------------
 # 7. Transparent Compression & Pseudo-Random Scattering Tests
 # ----------------------------------------------------------------------
+
 
 def test_transparent_compression_roundtrip(tmp_path):
     img = tmp_path / "comp_carrier.png"
@@ -307,6 +316,7 @@ def test_combined_compression_and_scattering(tmp_path):
 
 def test_decode_to_file_rejects_directory_destination(tmp_path):
     from stego.carriers import decode_carrier_to_file
+
     img = tmp_path / "carrier.png"
     out = tmp_path / "stego.png"
     _create_image(img)
@@ -321,6 +331,7 @@ def test_decode_to_file_rejects_directory_destination(tmp_path):
 
 def test_extract_bytes_truncated_buffer_raises_cleanly():
     from stego.envelope import extract_bytes
+
     # 5 bytes needed = 40 elements, but only provide 10
     short_buffer = bytearray(10)
     with pytest.raises(CorruptedPayloadError, match="Carrier buffer truncated"):
@@ -329,6 +340,7 @@ def test_extract_bytes_truncated_buffer_raises_cleanly():
 
 def test_peek_envelope_on_tiny_buffer_does_not_crash():
     from stego.envelope import peek_envelope
+
     tiny_buffer = bytearray([0] * 5)
     info = peek_envelope(tiny_buffer, total_capacity_bytes=10)
     assert info["detected"] is False

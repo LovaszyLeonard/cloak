@@ -1,12 +1,11 @@
 """Envelope framing, compression, and zero-copy bitwise steganography engine for Cloak."""
 
 import hashlib
-import zlib
-from typing import Dict, List, Optional, Tuple, Union
+
 from .exceptions import (
     CapacityError,
-    PayloadNotFoundError,
     CorruptedPayloadError,
+    PayloadNotFoundError,
 )
 
 # 4-byte magic signature: 'C', 'L', 'K', version 0x01
@@ -20,14 +19,14 @@ FLAG_SCATTERED = 0x08
 HEADER_SIZE = 9  # 4 bytes magic + 1 byte flags + 4 bytes length (big-endian)
 
 
-def derive_scatter_seed(password: Optional[str] = None) -> bytes:
+def derive_scatter_seed(password: str | None = None) -> bytes:
     """Derive a deterministic 32-byte seed for pseudo-random bit scattering."""
     if password:
-        return hashlib.sha256(b"cloak_scatter:" + password.encode('utf-8')).digest()
+        return hashlib.sha256(b"cloak_scatter:" + password.encode("utf-8")).digest()
     return hashlib.sha256(b"cloak_scatter:default_unencrypted").digest()
 
 
-def _get_feistel_params(key_bytes: bytes, M: int) -> Tuple[List[int], int, int]:
+def _get_feistel_params(key_bytes: bytes, M: int) -> tuple[list[int], int, int]:
     """Precompute Feistel round keys, half-width, and bitmask for M elements."""
     if M <= 1:
         return [], 0, 0
@@ -36,14 +35,11 @@ def _get_feistel_params(key_bytes: bytes, M: int) -> Tuple[List[int], int, int]:
         k += 1
     w = k // 2
     mask = (1 << w) - 1
-    round_keys = [
-        int.from_bytes(hashlib.sha256(key_bytes + bytes([r])).digest()[:4], "big")
-        for r in range(4)
-    ]
+    round_keys = [int.from_bytes(hashlib.sha256(key_bytes + bytes([r])).digest()[:4], "big") for r in range(4)]
     return round_keys, w, mask
 
 
-def _feistel_permute_fast(val: int, round_keys: List[int], w: int, mask: int, M: int) -> int:
+def _feistel_permute_fast(val: int, round_keys: list[int], w: int, mask: int, M: int) -> int:
     """Perform Feistel permutation in O(1) time using precomputed keys and bitmask."""
     if M <= 1:
         return 0
@@ -83,7 +79,7 @@ def pack_envelope(
     if is_scattered:
         flags |= FLAG_SCATTERED
 
-    length_bytes = len(payload).to_bytes(4, byteorder='big')
+    length_bytes = len(payload).to_bytes(4, byteorder="big")
     return MAGIC + bytes([flags]) + length_bytes + payload
 
 
@@ -140,7 +136,7 @@ def embed_bits_scattered(
         carrier[carrier_idx] = (carrier[carrier_idx] & 0xFE) | bit
 
 
-def extract_bytes(carrier: Union[bytes, bytearray], num_bytes: int, start_idx: int = 0, stride: int = 1) -> bytes:
+def extract_bytes(carrier: bytes | bytearray, num_bytes: int, start_idx: int = 0, stride: int = 1) -> bytes:
     """Extract num_bytes sequentially from the LSBs of carrier using bitwise accumulation."""
     if num_bytes == 0:
         return b""
@@ -161,7 +157,7 @@ def extract_bytes(carrier: Union[bytes, bytearray], num_bytes: int, start_idx: i
 
 
 def extract_bytes_scattered(
-    carrier: Union[bytes, bytearray],
+    carrier: bytes | bytearray,
     num_bytes: int,
     seed: bytes,
     total_elements: int,
@@ -193,7 +189,7 @@ def extract_bytes_scattered(
     return bytes(out)
 
 
-def peek_envelope(carrier: Union[bytes, bytearray], total_capacity_bytes: int, stride: int = 1) -> Dict:
+def peek_envelope(carrier: bytes | bytearray, total_capacity_bytes: int, stride: int = 1) -> dict:
     """
     Inspect whether carrier contains a valid Cloak envelope header without reading the full payload.
     Returns a dict with detection status and payload metadata.
@@ -211,7 +207,7 @@ def peek_envelope(carrier: Union[bytes, bytearray], total_capacity_bytes: int, s
         return {"detected": False, "reason": "No magic signature"}
 
     flags = header[4]
-    payload_len = int.from_bytes(header[5:9], byteorder='big')
+    payload_len = int.from_bytes(header[5:9], byteorder="big")
     is_valid_len = (HEADER_SIZE + payload_len) <= total_capacity_bytes
 
     return {
@@ -227,11 +223,11 @@ def peek_envelope(carrier: Union[bytes, bytearray], total_capacity_bytes: int, s
 
 
 def unpack_envelope(
-    carrier: Union[bytes, bytearray],
+    carrier: bytes | bytearray,
     total_capacity_bytes: int,
     stride: int = 1,
-    password: Optional[str] = None,
-) -> Tuple[int, bytes]:
+    password: str | None = None,
+) -> tuple[int, bytes]:
     """
     Validate and unpack the Cloak envelope from carrier elements.
     Supports both sequential and pseudo-random scattered embedding modes.
@@ -247,7 +243,7 @@ def unpack_envelope(
         raise PayloadNotFoundError("No Cloak payload found in carrier (missing magic signature).")
 
     flags = header[4]
-    payload_len = int.from_bytes(header[5:9], byteorder='big')
+    payload_len = int.from_bytes(header[5:9], byteorder="big")
 
     required_capacity = HEADER_SIZE + payload_len
     if required_capacity > total_capacity_bytes:
